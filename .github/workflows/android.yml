@@ -2,7 +2,7 @@ YAML
 
 name: Build Android APK
 
-on:
+'on':
   workflow_dispatch:
 
 permissions:
