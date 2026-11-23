@@ -1,19 +1,19 @@
+YAML
 
 name: Build Android APK
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'mureom_android_tablet_build.zip'
-      - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Java
@@ -21,38 +21,43 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-          
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
-        with:
-          packages: ''
-          log-accepted-android-sdk-licenses: 'false'
-      
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses
-        
-      - name: Install Android SDK
-        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
 
-      - name: Extract project
+      - name: Extract Android project
         run: |
           mkdir extracted
           unzip -q mureom_android_tablet_build.zip -d extracted
           PROJECT_DIR=$(dirname "$(find extracted -name settings.gradle.kts -print -quit)")
-          echo "PROJECT_DIR=$PROJECT_DIR" >> $GITHUB_ENV
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "Android project not found"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Build APK
         run: |
           cd "$PROJECT_DIR"
-          gradle assembleDebug
+          gradle --no-daemon assembleDebug
+
+      - name: Verify APK
+        run: |
+          test -s "$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: mureom-debug-apk
           path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
